@@ -1,0 +1,236 @@
+
+int explodeExplore(struct LINETREE* thead, char* polarity, struct FITNESS* best, int D, int output, int* evaluation, int R, int N) {
+	struct FITNESS* p = NULL, * fhead = NULL, * q = NULL, * temp = NULL, * r = NULL, * w = NULL;
+	int i, base = 3;
+	int returnNumber = 1;
+	char* targetPolarity = NULL;
+	int lenD = D + 1;
+	int num;
+	if (lenD < 2) exit(0);
+	fhead = allocationFitness(lenD);
+	q = fhead;
+	r = fhead;
+	for (i = 0; i < N; i++) {
+		p = allocationFitness(lenD);
+		strcpy_s(p->index, lenD, (best)->index);
+		if (R == 3) num = randInt(1, 2);
+		else if (R == 4) num = randInt(1, 3);
+		else num = R;
+		expoldeChange(p, r, D, num);
+		q->next = p;
+		q = p;
+	}
+	q = fhead->next;
+	while (q) {
+		(*evaluation)++;
+		differentPolarity(D, output, polarity, q->index, thead);
+		q->fitness = area(thead, D, output);
+		if (q->fitness && (q->fitness < (best)->fitness)) {
+			temp = q;
+			(best)->count = 0;
+			(best)->fitness = q->fitness;
+			strcpy_s((best)->index, lenD, q->index);
+		}
+		strcpy_s(polarity, lenD, q->index);
+		if ((*evaluation) >= EVALUATIONS) {
+			returnNumber = 0;
+			break;
+		}
+		q = q->next;
+	}
+	q = fhead;
+	while (q) {
+		p = q->next;
+		free(q);
+		q = p;
+	}
+	return returnNumber;
+}
+void updatePosition(struct FITNESS* best, struct FITNESS* head, int N, int T, int D,int maxIter) {
+	float a, A, P, rOne;
+	int C;
+	struct FITNESS* fitP;
+	fitP = head->next;
+	a = 2 - (((float)(2 * T)) / maxIter);
+	while (fitP) {
+		rOne = randFloat(0, 1, 1);
+		A = 2 * a * rOne - a;
+		C = randInt(0, 2);
+		P = randFloat(0, 1, 1);
+		dimensionUpdate(fitP, best, head, A, C, P, D, N);
+		fitP = fitP->next;
+	}
+}
+int repeat(struct FITNESS* best, int N, int D, char* polarity, struct LINETREE* thead, int input, int T, int output, int* num, FILE* iterfp, struct CHECKTREE* chead, int* evaluation, int R, int FN, int duraction, int iter) {
+	struct FITNESS* fhead = NULL, * perfect = NULL;
+	int check;
+	int returnNumber = 1;
+	int lenD = input + 1;
+	char* midPolarity = NULL;
+	int checkTreeFlag = 0;
+	int oldBest = 0, oldValue = 0;
+	int index = 0, change = 0;
+	fhead = allocationFitness(input + 1);
+	midPolarity = (char*)malloc(sizeof(char) * lenD);
+	perfect = allocationFitness(input+1);
+	perfect->fitness = -1;
+	if (!midPolarity) {
+		exit(0);
+	}
+	memset(midPolarity, 0, lenD);
+	populationInit(N, D, fhead);
+	if ((*evaluation) == EVALUATIONS) return 0;
+	check = whaleFitness(thead, fhead, perfect, D, polarity, &change, input, output,evaluation);
+	if (!check) {
+		if (perfect->fitness && perfect->fitness < best->fitness) {
+			perfect->count = 0;
+			best->count = 0;
+			best->fitness = perfect->fitness;
+			strcpy_s(best->index, lenD, perfect->index);
+		}
+		fprintf(iterfp, "%d\t", best->fitness);
+		free(midPolarity);
+		midPolarity = NULL;
+		freePopu(fhead);
+		fhead = NULL;
+		free(perfect);
+		perfect = NULL;
+		return 0;
+	}
+	oldBest = -1;
+	while (index < iter && (*num < (iter + 1))) {
+		if (oldBest == -1) {
+			oldBest = 0;
+		}
+		else {
+			oldBest = perfect->fitness;
+		}
+		updatePosition(perfect, fhead, N, index, D,T);
+		check = whaleFitness(thead, fhead, perfect, D, polarity, &change, input, output, evaluation);
+		if (!check) {
+			if (perfect->fitness && perfect->fitness < best->fitness) {
+				perfect->count = 0;
+				best->count = 0;
+				best->fitness = perfect->fitness;
+				strcpy_s(best->index, lenD, perfect->index);
+			}
+			fprintf(iterfp, "%d\t", best->fitness);
+			free(midPolarity);
+			midPolarity = NULL;
+			freePopu(fhead);
+			fhead = NULL;
+			free(perfect);
+			perfect = NULL;
+			return 0;
+		}
+		check = explode(thead, polarity, fhead, perfect, D,  output, evaluation, R, FN);
+		if (!check) {
+			if (perfect->fitness && perfect->fitness < best->fitness) {
+				perfect->count = 0;
+				best->count = 0;
+				best->fitness = perfect->fitness;
+				strcpy_s(best->index, lenD, perfect->index);
+			}
+			fprintf(iterfp, "%d\t", best->fitness);
+			free(midPolarity);
+			midPolarity = NULL;
+			freePopu(fhead);
+			fhead = NULL;
+			free(perfect);
+			perfect = NULL;
+			return 0;
+		}
+		checkTreeFlag = 0;
+		visitCheckTree(chead, 0, D, perfect->index, &checkTreeFlag);
+		if (checkTreeFlag == 0) {
+			if (!strcmp(perfect->index, midPolarity)) {
+			}
+			else {
+				oldValue = perfect->fitness;
+				check = explode(thead, polarity, fhead, perfect, D, output, evaluation, R, FN);
+				if (!check) {
+					if (perfect->fitness && perfect->fitness < best->fitness) {
+						perfect->count = 0;
+						best->count = 0;
+						best->fitness = perfect->fitness;
+						strcpy_s(best->index, lenD, perfect->index);
+					}
+					fprintf(iterfp, "%d\t", best->fitness);
+					free(midPolarity);
+					midPolarity = NULL;
+					freePopu(fhead);
+					fhead = NULL;
+					free(perfect);
+					perfect = NULL;
+					return 0;
+				}
+				if (oldValue > perfect->fitness ) {
+					checkTreeFlag = 0;
+					visitCheckTree(chead, 0, D, perfect->index, &checkTreeFlag);
+					if (checkTreeFlag) {
+						buildCheckTree(chead, 0, D, perfect->index);
+						strcpy_s(midPolarity, lenD, perfect->index);
+					}
+					else {
+						fprintf(iterfp, "%d\t", best->fitness);
+						(*num)++;
+						free(midPolarity);
+						midPolarity = NULL;
+						freePopu(fhead);
+						free(perfect);
+						perfect = NULL;
+						return 1;
+					}
+				}
+				else {
+					fprintf(iterfp, "%d\t", best->fitness);
+					(*num)++;
+					free(midPolarity);
+					midPolarity = NULL;
+					freePopu(fhead);
+					fhead = NULL;
+					free(perfect);
+					perfect = NULL;
+					return 1;
+				}
+			}
+		}
+		else {
+			buildCheckTree(chead, 0, D, perfect->index);
+			strcpy_s(midPolarity, lenD, perfect->index);
+		}
+		if (perfect->fitness && perfect->fitness < best->fitness) {
+			perfect->count = 0;
+			best->count = 0;
+			best->fitness = perfect->fitness;
+			strcpy_s(best->index, lenD, perfect->index);
+		}
+		if (oldBest == perfect->fitness) {
+			perfect->count++;
+		}
+		else {
+			perfect->count = 0;
+		}
+		if ((perfect->count + 1) > (duraction-1)) {
+			fprintf(iterfp, "%d\t", best->fitness);
+			(*num)++;
+			free(midPolarity);
+			midPolarity = NULL;
+			freePopu(fhead);
+			fhead = NULL;
+			free(perfect);
+			perfect = NULL;
+			return 1;
+		}
+		fprintf(iterfp, "%d\t", best->fitness);
+		(*num)++;
+		index++;
+	}
+	free(midPolarity);
+	midPolarity = NULL;
+	freePopu(fhead);
+	fhead = NULL;
+	free(perfect);
+	perfect = NULL;
+	return 1;
+}
